@@ -1,0 +1,6 @@
+{
+  "name": "Finanças Familiares",
+  "description": "App PWA de finanças familiares com sincronização no Google Drive.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,26 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Função utilitária para verificar login ativo via Firebase Auth
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Segurança Baseada no UID (Substituindo o antigo "deviceHash" hardcoded do LocalStorage)
+    match /users/{userId} {
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Coleção Central de Dados Financeiros
+    match /appData/finances {
+      // Regra Corporativa: O ideal em produção seria `/familyGroups/{groupId}/finances`
+      // Mas para manter compatibilidade com sua árvore de dados atual (`appData/finances` única),
+      // restringimos o acesso apenas a usuários logados cujos UIDs sejam vinculados à família (Custom Claims).
+      
+      // Permitimos Leitura/Escrita se o usuário tem a Custom Claim de admin ou membro da família.
+      // Firebase Cloud Functions será usado para conceder a Claim "familyMember = true".
+      allow read, write: if isAuthenticated() && request.auth.token.familyMember == true;
+    }
+  }
+}
