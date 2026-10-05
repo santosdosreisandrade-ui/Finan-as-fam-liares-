@@ -1,14 +1,38 @@
 import { LocalData, Transaction } from '../types';
+import { getDoc, setDoc } from 'firebase/firestore/lite';
+import { financesDocRef } from './firebaseClient';
 
 const DEFAULT_CATEGORIES = ['Moradia', 'Alimentação', 'Transporte', 'Lazer', 'Saúde', 'Educação', 'Luz', 'Água', 'Gás', 'Streaming', 'Presente', 'Criança', 'Delivery', 'Outros'];
 
 export const getRemoteData = async (): Promise<LocalData> => {
   try {
-    const res = await fetch('/api/data');
-    if (!res.ok) throw new Error('Failed to fetch data');
-    
-    let parsed = await res.json() as LocalData;
-    if (!parsed || typeof parsed !== 'object') parsed = { transactions: {}, categories: DEFAULT_CATEGORIES };
+    let parsed: LocalData | null = null;
+
+    // 1. Tenta ler diretamente do Firestore (funciona nativamente no Android APK e na Web)
+    try {
+      const snap = await getDoc(financesDocRef);
+      if (snap.exists()) {
+        parsed = snap.data() as LocalData;
+      }
+    } catch (firestoreErr) {
+      console.warn('Direct Firestore read failed, attempting /api/data fallback:', firestoreErr);
+    }
+
+    // 2. Se a leitura direta não obteve dados, tenta o endpoint /api/data (fallback Web)
+    if (!parsed) {
+      try {
+        const res = await fetch('/api/data');
+        if (res.ok) {
+          parsed = await res.json() as LocalData;
+        }
+      } catch (apiErr) {
+        console.warn('API endpoint fetch failed:', apiErr);
+      }
+    }
+
+    if (!parsed || typeof parsed !== 'object') {
+      throw new Error('No data received from cloud');
+    }
     
     if (!parsed.transactions) parsed.transactions = {};
     else {
@@ -44,17 +68,71 @@ export const getRemoteData = async (): Promise<LocalData> => {
 };
 
 export const setRemoteData = async (data: LocalData): Promise<void> => {
+  if (!data || typeof data !== 'object') {
+    console.warn('Blocked attempt to save null or invalid data');
+    return;
+  }
+
+  // Atualiza sempre o backup local no localStorage
   try {
     localStorage.setItem('fintrack_local_backup', JSON.stringify(data));
-    const res = await fetch('/api/data', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    if (!res.ok) throw new Error('Failed to save data to cloud');
-  } catch (e) {
-    console.error('Failed to save remote data, saved locally instead', e);
-    // You might want to flag that there's pending sync data here
+  } catch (err) {
+    console.warn('Failed to update local backup in localStorage', err);
+  }
+
+  try {
+    // 1. Antes de qualquer gravação, faz a leitura do documento existente no Firestore
+    const snap = await getDoc(financesDocRef);
+    let mergedData: LocalData = { ...data };
+
+    if (snap.exists()) {
+      const existingData = snap.data() as LocalData;
+      
+      // TRAVA DE SEGURANÇA: se os dados a salvar tiverem transações vazias,
+      // mas o Firestore tiver transações existentes, PRESERVA as transações existentes
+      const incomingTxCount = Object.keys(data.transactions || {}).length;
+      const existingTxCount = Object.keys(existingData.transactions || {}).length;
+      
+      if (incomingTxCount === 0 && existingTxCount > 0) {
+        console.warn('Proteção acionada: impedida sobrescrita com transações vazias.');
+        mergedData.transactions = existingData.transactions;
+      }
+
+      // Preserva quaisquer coleções existentes que não estejam no payload recebido
+      if (!mergedData.people && existingData.people) mergedData.people = existingData.people;
+      if (!mergedData.cards && existingData.cards) mergedData.cards = existingData.cards;
+      if (!mergedData.savings && existingData.savings) mergedData.savings = existingData.savings;
+      if (!mergedData.machines && existingData.machines) mergedData.machines = existingData.machines;
+      if (!mergedData.housings && existingData.housings) mergedData.housings = existingData.housings;
+      if (!mergedData.insurances && existingData.insurances) mergedData.insurances = existingData.insurances;
+      if (!mergedData.devices && existingData.devices) mergedData.devices = existingData.devices;
+      if (!mergedData.logs && existingData.logs) mergedData.logs = existingData.logs;
+      if (!mergedData.budgets && existingData.budgets) mergedData.budgets = existingData.budgets;
+    }
+
+    // 2. Grava diretamente no documento appData/finances existente
+    await setDoc(financesDocRef, mergedData);
+
+    // 3. Notifica o endpoint /api/data caso esteja no ambiente Web para manter sincronia
+    if (typeof window !== 'undefined' && window.location.protocol.startsWith('http')) {
+      fetch('/api/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(mergedData)
+      }).catch(() => {});
+    }
+  } catch (firestoreError) {
+    console.warn('Direct Firestore write failed, trying fallback to /api/data:', firestoreError);
+    try {
+      const res = await fetch('/api/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error('Failed to save data via /api/data');
+    } catch (apiErr) {
+      console.error('Failed to save to cloud, saved locally in cache', apiErr);
+    }
   }
 };
 
