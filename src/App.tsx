@@ -8,7 +8,7 @@ import { FamilyManager } from './components/FamilyManager';
 import { PendingAlerts } from './components/PendingAlerts';
 import { SavingsManager } from './components/SavingsManager';
 import { HealthManager } from './components/HealthManager';
-import { getRemoteData, setRemoteData, getActiveTransactions, getPreviousBalance, mergeData } from './lib/storage';
+import { getRemoteData, setRemoteData, getActiveTransactions, getPreviousBalance, mergeData, getLocalBackup, onDataSynced } from './lib/storage';
 import { EditTransactionModal } from './components/EditTransactionModal';
 import { ConfirmPaymentModal } from './components/ConfirmPaymentModal';
 import { PlanningManager } from './components/PlanningManager';
@@ -21,7 +21,7 @@ import { Transaction, LocalData, Card, Person, Savings, Machine } from './types'
 
 
 export default function App() {
-  const [data, setData] = useState<LocalData>({ transactions: {} });
+  const [data, setData] = useState<LocalData>(() => getLocalBackup());
 
   
   const [deviceId] = useState(() => {
@@ -198,9 +198,19 @@ export default function App() {
     computedCategories.push('Pet');
   }
 
-  // Initialize local data
+  // Initialize local data and subscribe to background sync
   useEffect(() => {
-    getRemoteData().then(d => setData(d));
+    getRemoteData().then(d => {
+      if (d) setData(d);
+    });
+
+    const unsubscribe = onDataSynced((syncedData) => {
+      if (syncedData) setData(syncedData);
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const [currentMonth, setCurrentMonth] = useState(() => {
