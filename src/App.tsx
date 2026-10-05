@@ -14,7 +14,7 @@ import { ConfirmPaymentModal } from './components/ConfirmPaymentModal';
 import { PlanningManager } from './components/PlanningManager';
 import { LockScreen, SecuritySettingsModal } from './components/Security';
 import { AuditLogsModal } from './components/AuditLogsModal';
-import { showNotification, requestNotificationPermission } from './lib/notifications';
+import { showNotification, requestNotificationPermission, getNotificationPermission, initNotificationChannel } from './lib/notifications';
 import { MemoryModal } from './components/MemoryModal';
 import { DevicesModal } from './components/DevicesModal';
 import { Transaction, LocalData, Card, Person, Savings, Machine } from './types';
@@ -146,19 +146,11 @@ export default function App() {
   useEffect(() => {
     if (isAuthorized && pendingDevices.length > prevPendingRef.current) {
       // New device request!
-      if ('Notification' in window && Notification.permission === 'granted') {
-        const latestDevice = pendingDevices.sort((a, b) => b.requestedAt - a.requestedAt)[0];
-        if (latestDevice) {
-          try {
-            new Notification('Novo Aparelho Solicitando Acesso', {
-              body: `O usuário ${latestDevice.userName} quer acessar o aplicativo.`,
-              icon: '/icon-192.png',
-              badge: '/icon-192.png'
-            });
-          } catch (e) {
-            console.error('Failed to show notification', e);
-          }
-        }
+      const latestDevice = pendingDevices.sort((a, b) => b.requestedAt - a.requestedAt)[0];
+      if (latestDevice) {
+        showNotification('Novo Aparelho Solicitando Acesso', {
+          body: `O usuário ${latestDevice.userName} quer acessar o aplicativo.`
+        });
       }
     }
     prevPendingRef.current = pendingDevices.length;
@@ -228,13 +220,15 @@ export default function App() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
   useEffect(() => {
-    if ('Notification' in window) {
-      setNotificationsEnabled(Notification.permission === 'granted');
-    }
+    initNotificationChannel();
+    getNotificationPermission().then(perm => {
+      setNotificationsEnabled(perm === 'granted');
+    });
   }, []);
 
   const checkAndSendNotifications = async (force = false) => {
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    const perm = await getNotificationPermission();
+    if (perm !== 'granted') return;
     if (!data || !data.transactions) return;
     
     const today = new Date();
@@ -291,20 +285,18 @@ export default function App() {
   };
 
   const toggleNotifications = async () => {
-    if (!('Notification' in window)) {
-      alert('Seu navegador não suporta notificações.');
-      return;
-    }
-    if (Notification.permission === 'granted') {
+    const currentPerm = await getNotificationPermission();
+    if (currentPerm === 'granted') {
       checkAndSendNotifications(true);
-    } else if (Notification.permission !== 'denied') {
-      const permission = await requestNotificationPermission();
-      setNotificationsEnabled(permission === 'granted');
-      if (permission === 'granted') {
-        checkAndSendNotifications(true);
-      }
     } else {
-      alert('As notificações foram bloqueadas. Habilite-as nas configurações do seu navegador.');
+      const permission = await requestNotificationPermission();
+      const granted = permission === 'granted';
+      setNotificationsEnabled(granted);
+      if (granted) {
+        checkAndSendNotifications(true);
+      } else if (permission === 'denied') {
+        alert('As notificações foram bloqueadas. Habilite-as nas configurações do seu aparelho.');
+      }
     }
   };
 

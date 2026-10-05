@@ -2,7 +2,7 @@ import { formatCurrency } from "../lib/format";
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, Bell, BellRing } from 'lucide-react';
 import { Transaction } from '../types';
-import { showNotification, requestNotificationPermission } from '../lib/notifications';
+import { showNotification, requestNotificationPermission, getNotificationPermission } from '../lib/notifications';
 
 interface Props {
   transactions: Transaction[];
@@ -10,7 +10,11 @@ interface Props {
 }
 
 export const PendingAlerts: React.FC<Props> = ({ transactions, onToggleStatus }) => {
-  const [permission, setPermission] = useState('Notification' in window ? window.Notification.permission : 'default');
+  const [permission, setPermission] = useState<'granted' | 'denied' | 'default'>('default');
+
+  useEffect(() => {
+    getNotificationPermission().then(p => setPermission(p));
+  }, []);
 
   const getDayStr = (offset: number) => {
     const d = new Date();
@@ -30,7 +34,7 @@ export const PendingAlerts: React.FC<Props> = ({ transactions, onToggleStatus })
   ).sort((a, b) => ((a.date || "").localeCompare(b.date || "")));
 
   useEffect(() => {
-    if ('Notification' in window && alerts.length > 0 && permission === 'granted') {
+    if (alerts.length > 0 && permission === 'granted') {
       const lastPush = localStorage.getItem('last_push_date');
       if (lastPush !== todayStr) {
          showNotification('Contas Pendentes - Finanças', {
@@ -42,16 +46,12 @@ export const PendingAlerts: React.FC<Props> = ({ transactions, onToggleStatus })
   }, [alerts.length, permission, todayStr]);
 
   const requestPush = async () => {
-    if ('Notification' in window) {
-      const perm = await requestNotificationPermission();
-      setPermission(perm);
-      if (perm === 'granted') {
-        showNotification('Lembretes Ativados!', { body: 'Você receberá avisos sobre contas próximas do vencimento.' });
-      } else {
-        alert('As notificações foram bloqueadas nas configurações do seu navegador.');
-      }
-    } else {
-      alert('Seu navegador não suporta notificações.');
+    const perm = await requestNotificationPermission();
+    setPermission(perm);
+    if (perm === 'granted') {
+      showNotification('Lembretes Ativados!', { body: 'Você receberá avisos sobre contas próximas do vencimento.' });
+    } else if (perm === 'denied') {
+      alert('As notificações foram bloqueadas nas configurações do seu aparelho.');
     }
   };
 

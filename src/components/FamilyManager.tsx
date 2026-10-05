@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import React, { useState, useRef, useEffect } from 'react';
 import { PersonName } from './PersonName';
 import { Users, Trash2, Edit2, Check, X, Plus, Copy, ChevronDown, ChevronUp } from 'lucide-react';
-import { showNotification, requestNotificationPermission } from '../lib/notifications';
+import { showNotification, requestNotificationPermission, getNotificationPermission } from '../lib/notifications';
 import { Person, PixKey, Machine, Housing, Insurance } from '../types';
 import { Monitor, Car, CreditCard, Home, Shield, Castle, Building } from 'lucide-react';
 import { CardsManager } from './CardsManager';
@@ -64,10 +64,8 @@ export const FamilyManager: React.FC<Props> = ({ people, machines, cards, onAddP
   const [subTab, setSubTab] = useState<'people' | 'machines' | 'cards' | 'housings' | 'insurances'>('people');
 
   useEffect(() => {
-    if (!("Notification" in window)) return;
-    
     const checkWarranties = async () => {
-      let permission = Notification.permission;
+      let permission = await getNotificationPermission();
       if (permission === "default") {
         permission = await requestNotificationPermission();
       }

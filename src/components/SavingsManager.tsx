@@ -3,7 +3,7 @@ import { formatCurrency } from "../lib/format";
 import { v4 as uuidv4 } from 'uuid';
 import React, { useState, useEffect } from 'react';
 import { Vault, Plus, Trash2, Edit2, Check, X, TrendingUp, PiggyBank, Calendar } from 'lucide-react';
-import { showNotification, requestNotificationPermission } from '../lib/notifications';
+import { showNotification, requestNotificationPermission, getNotificationPermission } from '../lib/notifications';
 import { Savings, Person } from '../types';
 
 interface Props {
@@ -171,10 +171,8 @@ export const SavingsManager: React.FC<Props> = ({ savings, people = {}, onSave, 
   const totalProfit = totalCurrentValue - totalInitial;
 
   useEffect(() => {
-    if (!("Notification" in window)) return;
-    
     const checkAndNotify = async () => {
-      let permission = Notification.permission;
+      let permission = await getNotificationPermission();
       if (permission === "default") {
         permission = await requestNotificationPermission();
       }
