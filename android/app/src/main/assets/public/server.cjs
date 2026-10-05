@@ -151,6 +151,7 @@ async function startServer() {
       }
     }
   }, 6e4);
+  app.use(import_express.default.static(import_path.default.join(process.cwd(), "public")));
   if (process.env.NODE_ENV !== "production") {
     const vite = await (0, import_vite.createServer)({
       server: { middlewareMode: true },
