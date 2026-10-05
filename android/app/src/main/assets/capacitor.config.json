@@ -1,0 +1,8 @@
+{
+	"appId": "com.financas.familiares",
+	"appName": "Finanças Familiares",
+	"webDir": "dist",
+	"server": {
+		"androidScheme": "https"
+	}
+}

@@ -1,0 +1,16 @@
+{
+  "name": "Finanças Familiares",
+  "short_name": "Finanças",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#111827",
+  "description": "App PWA de controle de finanças familiares com sincronização no Google Drive.",
+  "icons": [
+    {
+      "src": "/favicon.jpg",
+      "sizes": "1024x1024",
+      "type": "image/jpeg"
+    }
+  ]
+}
